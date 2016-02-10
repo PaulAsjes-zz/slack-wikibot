@@ -1,6 +1,6 @@
 {
   "name": "wikibot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Slack Bot for wikipedia",
   "main": "index.js",
   "scripts": {
