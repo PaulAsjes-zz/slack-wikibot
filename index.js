@@ -53,9 +53,8 @@ function getUrbanDictionaryDefinition(term, cb) {
     }
 
     let data = JSON.parse(res.text);
-    let url = data.list[0].permalink;
 
-    cb(null, data, url);
+    cb(null, data);
   })
 }
 
@@ -73,17 +72,19 @@ bot.respondTo('dic', (message, channel, user) => {
 
   bot.setTypingIndicator(message.channel);
 
-  getUrbanDictionaryDefinition(args, (err, result, url) => {
+  getUrbanDictionaryDefinition(args, (err, result) => {
     if (err) {
       channel.send(`I\'m sorry, but something went wrong with your query`);
       console.error(err);
       return;
     }
 
-    if (result.result_type === 'no_results') {
+    if (result.result_type !== 'exact') {
       channel.send('Sorry, no results found for that term');
       return;
     }
+
+    let url = result.list[0].permalink || '';
 
     let definition = result.list[0].definition;
     let example = result.list[0].example;
@@ -100,15 +101,19 @@ bot.respondTo('dic', (message, channel, user) => {
       }
     });
 
-    channel.send('*Example:*');
-    exampleParagraphs.forEach((paragraph) => {
-      if (paragraph !== '') {
-        channel.send(`> ${paragraph}`);
-      }
-    });
+    if (example) {
+      channel.send('*Example:*');
+      exampleParagraphs.forEach((paragraph) => {
+        if (paragraph !== '') {
+          channel.send(`> ${paragraph}`);
+        }
+      });
+    }
 
-    channel.send('*Sounds like:*');
-    channel.send(result.sounds[0]);
+    if (result.sounds[0]) {
+      channel.send('*Sounds like:*');
+      channel.send(result.sounds[0]);
+    }
   });
 }, true);
 
