@@ -3,8 +3,10 @@
 const Bot = require('./Bot');
 const request = require('superagent');
 
-const wikiAPI = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro=&explaintext=&titles="
+const wikiAPI = 'https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&exintro=&explaintext=&titles=';
 const wikiURL = 'https://en.wikipedia.org/wiki/';
+
+const udURL = 'http://api.urbandictionary.com/v0/define?term=';
 
 const bot = new Bot({
   token: process.env.SLACK_TOKEN,
@@ -39,8 +41,75 @@ function getWikiSummary(term, cb) {
     });
 }
 
-bot.respondTo('help', (message, channel) => {  
-  channel.send(`To use my Wikipedia functionality, type \`wiki\` followed by your search query`); 
+function getUrbanDictionaryDefinition(term, cb) {
+  let parameters = term.replace(/ /g, '%20');
+
+ request
+  .get(udURL + parameters)
+  .end((err, res) => {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    let data = JSON.parse(res.text);
+    let url = data.list[0].permalink;
+
+    cb(null, data, url);
+  })
+}
+
+bot.respondTo('help', (message, channel) => {
+  channel.send(`To use my Wikipedia functionality, type \`wiki\` followed by your search query`);
+  channel.send(`To use my Urban Dictionary functionality, type \`dic\` followed by your search query`);
+}, true);
+
+bot.respondTo('dic', (message, channel, user) => {
+  if (user && user.is_bot) {
+    return;
+  }
+
+  let args = getArgs(message.text).join(' ');
+
+  bot.setTypingIndicator(message.channel);
+
+  getUrbanDictionaryDefinition(args, (err, result, url) => {
+    if (err) {
+      channel.send(`I\'m sorry, but something went wrong with your query`);
+      console.error(err);
+      return;
+    }
+
+    if (result.result_type === 'no_results') {
+      channel.send('Sorry, no results found for that term');
+      return;
+    }
+
+    let definition = result.list[0].definition;
+    let example = result.list[0].example;
+
+    let definitionParagraphs = definition.replace(/\r/, '').split('\n');
+    let exampleParagraphs = example.replace(/\r/, '').split('\n');
+
+    channel.send(url);
+
+    channel.send('*Definition:*');
+    definitionParagraphs.forEach((paragraph) => {
+      if (paragraph !== '') {
+        channel.send(`> ${paragraph}`);
+      }
+    });
+
+    channel.send('*Example:*');
+    exampleParagraphs.forEach((paragraph) => {
+      if (paragraph !== '') {
+        channel.send(`> ${paragraph}`);
+      }
+    });
+
+    channel.send('*Sounds like:*');
+    channel.send(result.sounds[0]);
+  });
 }, true);
 
 bot.respondTo('wiki', (message, channel, user) => {
@@ -50,7 +119,7 @@ bot.respondTo('wiki', (message, channel, user) => {
 
   // grab the search parameters, but remove the command 'wiki' from the beginning
   // of the message first
-  let args = message.text.split(' ').slice(1).join(' ');
+  let args = getArgs(message.text).join(' ');
 
   // if there are no arguments, return
   if (args.length < 1) {
